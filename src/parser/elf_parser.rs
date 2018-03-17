@@ -1,11 +1,15 @@
+use std::mem;
 use nom::{IResult, IResult::*, Needed::{Size, Unknown}, *};
-
 use failure::Error;
 use error::RustepErrorKind;
+use format::{
+    executable::Executable,
+    elf::*,
+};
+use num::FromPrimitive;
+use enumflags::BitFlags;
 
-use structure::elf::*;
-
-pub fn parse_elf(input: &[u8]) -> Result<ElfStruct, Error> {
+pub fn parse_elf(input: &[u8]) -> Result<Executable, Error> {
     let elf_class = nom_try!(parse_elf_class(input)) as u32;
     match elf_class {
         ELFCLASS32 => parse_elf32(input),
@@ -14,24 +18,71 @@ pub fn parse_elf(input: &[u8]) -> Result<ElfStruct, Error> {
     }
 }
 
-pub fn parse_elf32(input: &[u8]) -> Result<ElfStruct, Error> {
+pub fn parse_elf32(input: &[u8]) -> Result<Executable, Error> {
     let hdr = nom_try!(parse_elf_header32(input));
+    let mut segments = Vec::new();
+    let mut sections = Vec::new();
     let program_headers = nom_try!(preceded!(
         input,
         take!(hdr.e_phoff),
         count!(call!(parse_elf_prog_header32), hdr.e_phnum as usize)
     ));
+    for p in program_headers.iter() {
+        let data = &input[(p.p_offset as usize)..(p.p_offset + p.p_filesz) as usize];
+        let segment_type = FromPrimitive::from_u32(p.p_type)
+            .ok_or(RustepErrorKind::SegmentType(p.p_type as u64))?;
+        let flags = BitFlags::from_bits(p.p_flags as u64)
+            .ok_or(RustepErrorKind::SegmentFlag(p.p_flags as u64))?;
+        let segment = ElfSegment32 {
+            phdr: *p,
+            segment_type: segment_type,
+            flags: flags,
+            data: data
+        };
+
+        segments.push(segment);
+    }
     let section_headers = nom_try!(preceded!(
         input,
         take!(hdr.e_shoff),
         count!(call!(parse_elf_section_header32), hdr.e_shnum as usize)
     ));
-    let struct32 = ElfStruct32 {
+    for s in section_headers.iter() {
+        let data = &input[(s.sh_offset as usize) .. (s.sh_offset + s.sh_size) as usize];
+        let section_type = FromPrimitive::from_u32(s.sh_type)
+            .ok_or(RustepErrorKind::SectionType(s.sh_type as u64))?;
+        let flags = BitFlags::from_bits(s.sh_flags as u64)
+            .ok_or(RustepErrorKind::SectionFlag(s.sh_flags as u64))?;
+        let name = String::new();
+
+        let section = ElfSection32 {
+            name: name,
+            shdr: *s,
+            section_type: section_type,
+            flags: flags,
+            data: data
+        };
+
+        sections.push(section);
+    }
+
+    let strtab_data = sections
+        .get(hdr.e_shstrndx as usize)
+        .map(|s| s.data);
+    if let Some(data) = strtab_data {
+        for s in sections.iter_mut() {
+            let name_bytes = nom_try!(take_until!(&data[s.shdr.sh_name as usize..], b"\x00" as &[u8]));
+            let mut new_name = String::from_utf8(name_bytes.to_vec())?;
+            mem::replace(&mut s.name, new_name);
+        }
+    }
+
+    let struct32 = Elf32 {
         header: hdr,
-        section_headers: section_headers,
-        program_headers: program_headers
+        sections: sections,
+        segments: segments,
     };
-    Ok(ElfStruct::Struct32(struct32))
+    Ok(Executable::Elf32(struct32))
 }
 
 #[test]
@@ -44,8 +95,8 @@ fn test_parse_elf32() {
     
     let result = parse_elf32(&buf).unwrap();
     match result {
-        ElfStruct::Struct32(res) => {
-            let section = res.section_headers[1];
+        Executable::Elf32(res) => {
+            let section = res.sections[1].shdr;
             assert_eq!(section.sh_name, 0x1b);
             assert_eq!(section.sh_type, 1);
             assert_eq!(section.sh_flags, 2);
@@ -57,7 +108,7 @@ fn test_parse_elf32() {
             assert_eq!(section.sh_addralign, 1);
             assert_eq!(section.sh_entsize, 0);
 
-            let segment = res.program_headers[0];
+            let segment = res.segments[0].phdr;
             assert_eq!(segment.p_type, 6);
             assert_eq!(segment.p_offset, 0x34);
             assert_eq!(segment.p_vaddr, 0x34);
@@ -71,38 +122,90 @@ fn test_parse_elf32() {
     };
 }
 
-pub fn parse_elf64(input: &[u8]) -> Result<ElfStruct, Error> {
+pub fn parse_elf64(input: &[u8]) -> Result<Executable, Error> {
     let hdr = nom_try!(parse_elf_header64(input));
+    let mut segments = Vec::new();
+    let mut sections = Vec::new();
     let program_headers = nom_try!(preceded!(
         input,
         take!(hdr.e_phoff),
         count!(call!(parse_elf_prog_header64), hdr.e_phnum as usize)
     ));
+
+    for p in program_headers.iter() {
+        let data = &input[(p.p_offset as usize)..(p.p_offset + p.p_filesz) as usize];
+        println!("seg type {:x}", p.p_type);
+        let segment_type = FromPrimitive::from_u32(p.p_type)
+            .ok_or(RustepErrorKind::SegmentType(p.p_type as u64))?;
+        let flags = BitFlags::from_bits(p.p_flags as u64)
+            .ok_or(RustepErrorKind::SegmentFlag(p.p_flags as u64))?;
+        let segment = ElfSegment64 {
+            phdr: *p,
+            segment_type: segment_type,
+            flags: flags,
+            data: data
+        };
+
+        segments.push(segment);
+    }
+
     let section_headers = nom_try!(preceded!(
         input,
         take!(hdr.e_shoff),
         count!(call!(parse_elf_section_header64), hdr.e_shnum as usize)
     ));
-    let struct64 = ElfStruct64 {
+
+    for s in section_headers.iter() {
+        let data = &input[(s.sh_offset as usize) .. (s.sh_offset + s.sh_size) as usize];
+        let section_type = FromPrimitive::from_u32(s.sh_type)
+            .ok_or(RustepErrorKind::SectionType(s.sh_type as u64))?;
+        let flags = BitFlags::from_bits(s.sh_flags as u64)
+            .ok_or(RustepErrorKind::SectionFlag(s.sh_flags as u64))?;
+        let mut name = String::new();
+
+        let section = ElfSection64 {
+            name: name,
+            shdr: *s,
+            section_type: section_type,
+            flags: flags,
+            data: data
+        };
+
+        sections.push(section);
+    }
+
+    let strtab_data = sections
+        .get(hdr.e_shstrndx as usize)
+        .map(|s| s.data);
+
+    if let Some(data) = strtab_data {
+        for s in sections.iter_mut() {
+            let name_bytes = nom_try!(take_until!(&data[s.shdr.sh_name as usize..], b"\x00" as &[u8]));
+            let new_name = String::from_utf8(name_bytes.to_vec())?;
+            mem::replace(&mut s.name, new_name);
+        }
+    }
+
+    let struct64 = Elf64 {
         header: hdr,
-        section_headers: section_headers,
-        program_headers: program_headers,
+        sections: sections,
+        segments: segments,
     };
-    Ok(ElfStruct::Struct64(struct64))
+    Ok(Executable::Elf64(struct64))
 }
 
 #[test]
-fn test_parse_elf64() {
+fn test_parse_elf() {
     use std::{fs::File, io::prelude::*};
 
     let mut file = File::open("test/test").unwrap();
     let mut buf = Vec::new();
     file.read_to_end(&mut buf).unwrap();
     
-    let result = parse_elf64(&buf).unwrap();
+    let result = parse_elf(&buf).unwrap();
     match result {
-        ElfStruct::Struct64(res) => {
-            let section = res.section_headers[1];
+        Executable::Elf64(res) => {
+            let section = res.sections[1].shdr;
             assert_eq!(section.sh_name, 0x1b);
             assert_eq!(section.sh_type, 1);
             assert_eq!(section.sh_flags, 2);
@@ -114,7 +217,7 @@ fn test_parse_elf64() {
             assert_eq!(section.sh_addralign, 1);
             assert_eq!(section.sh_entsize, 0);
 
-            let segment = res.program_headers[0];
+            let segment = res.segments[0].phdr;
             assert_eq!(segment.p_type, 6);
             assert_eq!(segment.p_offset, 0x40);
             assert_eq!(segment.p_vaddr, 0x40);
@@ -131,10 +234,10 @@ fn test_parse_elf64() {
     let mut buf = Vec::new();
     file.read_to_end(&mut buf).unwrap();
     
-    let result = parse_elf32(&buf).unwrap();
+    let result = parse_elf(&buf).unwrap();
     match result {
-        ElfStruct::Struct32(res) => {
-            let section = res.section_headers[1];
+        Executable::Elf32(res) => {
+            let section = res.sections[1].shdr;
             assert_eq!(section.sh_name, 0x1b);
             assert_eq!(section.sh_type, 1);
             assert_eq!(section.sh_flags, 2);
@@ -146,7 +249,7 @@ fn test_parse_elf64() {
             assert_eq!(section.sh_addralign, 1);
             assert_eq!(section.sh_entsize, 0);
 
-            let segment = res.program_headers[0];
+            let segment = res.segments[0].phdr;
             assert_eq!(segment.p_type, 6);
             assert_eq!(segment.p_offset, 0x34);
             assert_eq!(segment.p_vaddr, 0x34);
@@ -161,17 +264,17 @@ fn test_parse_elf64() {
 }
 
 #[test]
-fn test_parse_elf() {
+fn test_parse_elf64() {
     use std::{fs::File, io::prelude::*};
 
     let mut file = File::open("test/test").unwrap();
     let mut buf = Vec::new();
     file.read_to_end(&mut buf).unwrap();
     
-    let result = parse_elf(&buf).unwrap();
+    let result = parse_elf64(&buf).unwrap();
     match result {
-        ElfStruct::Struct64(res) => {
-            let section = res.section_headers[1];
+        Executable::Elf64(res) => {
+            let section = res.sections[1].shdr;
             assert_eq!(section.sh_name, 0x1b);
             assert_eq!(section.sh_type, 1);
             assert_eq!(section.sh_flags, 2);
@@ -183,7 +286,7 @@ fn test_parse_elf() {
             assert_eq!(section.sh_addralign, 1);
             assert_eq!(section.sh_entsize, 0);
 
-            let segment = res.program_headers[0];
+            let segment = res.segments[0].phdr;
             assert_eq!(segment.p_type, 6);
             assert_eq!(segment.p_offset, 0x40);
             assert_eq!(segment.p_vaddr, 0x40);
@@ -254,7 +357,7 @@ fn parse_e_ident(input: &[u8]) -> IResult<&[u8], [u8; 16]> {
     }
 }
 
-named!(parse_elf_header32<&[u8], elf32_hdr>,
+named!(parse_elf_header32<&[u8], Elf32_Ehdr>,
     do_parse!(
         e_ident: parse_e_ident >>
         e_type: le_u16 >>
@@ -270,7 +373,7 @@ named!(parse_elf_header32<&[u8], elf32_hdr>,
         e_shentsize: le_u16 >>
         e_shnum: le_u16 >>
         e_shstrndx: le_u16 >>
-        (elf32_hdr {
+        (Elf32_Ehdr {
             e_ident: e_ident,
             e_type: e_type,
             e_machine: e_machine,
@@ -341,7 +444,7 @@ fn test_parse_elf_header32() {
 
 // ############### Elf Header 64 ################
 
-named!(parse_elf_header64<&[u8], elf64_hdr>,
+named!(parse_elf_header64<&[u8], Elf64_Ehdr>,
     do_parse!(
         e_ident: parse_e_ident >>
         e_type: le_u16 >>
@@ -357,7 +460,7 @@ named!(parse_elf_header64<&[u8], elf64_hdr>,
         e_shentsize: le_u16 >>
         e_shnum: le_u16 >>
         e_shstrndx: le_u16 >>
-        (elf64_hdr {
+        (Elf64_Ehdr {
             e_ident: e_ident,
             e_type: e_type,
             e_machine: e_machine,
@@ -430,7 +533,7 @@ fn test_parse_elf_header64() {
 // ############### Elf Program Header 32 ################
 
 /// Parses a single elf program table, 32-bit version
-named!(parse_elf_prog_header32<&[u8], elf32_phdr>,
+named!(parse_elf_prog_header32<&[u8], Elf32_Phdr>,
     do_parse!(
         p_type: le_u32 >>
         p_offset: le_u32 >>
@@ -440,7 +543,7 @@ named!(parse_elf_prog_header32<&[u8], elf32_phdr>,
         p_memsz: le_u32 >>
         p_flags: le_u32 >>
         p_align: le_u32 >>
-        (elf32_phdr {
+        (Elf32_Phdr {
             p_type: p_type,
             p_offset: p_offset,
             p_vaddr: p_vaddr,
@@ -454,7 +557,7 @@ named!(parse_elf_prog_header32<&[u8], elf32_phdr>,
 );
 
 // ############### Elf Program Header 64 ################
-named!(parse_elf_prog_header64<&[u8], elf64_phdr>,
+named!(parse_elf_prog_header64<&[u8], Elf64_Phdr>,
     do_parse!(
         p_type: le_u32 >>
         p_flags: le_u32 >>
@@ -464,7 +567,7 @@ named!(parse_elf_prog_header64<&[u8], elf64_phdr>,
         p_filesz: le_u64 >>
         p_memsz: le_u64 >>
         p_align: le_u64 >>
-        (elf64_phdr {
+        (Elf64_Phdr {
             p_type: p_type,
             p_flags: p_flags,
             p_offset: p_offset,
@@ -478,7 +581,7 @@ named!(parse_elf_prog_header64<&[u8], elf64_phdr>,
 );
 
 // ############### Elf Section Header 32 ################
-named!(parse_elf_section_header32<&[u8], elf32_shdr>,
+named!(parse_elf_section_header32<&[u8], Elf32_Shdr>,
     do_parse!(
         sh_name: le_u32 >>
         sh_type: le_u32 >>
@@ -490,7 +593,7 @@ named!(parse_elf_section_header32<&[u8], elf32_shdr>,
         sh_info: le_u32 >>
         sh_addralign: le_u32 >>
         sh_entsize: le_u32 >>
-        (elf32_shdr {
+        (Elf32_Shdr {
             sh_name: sh_name,
             sh_type: sh_type,
             sh_flags: sh_flags,
@@ -506,7 +609,7 @@ named!(parse_elf_section_header32<&[u8], elf32_shdr>,
 );
 
 // ############### Elf Section Header 64 ################
-named!(parse_elf_section_header64<&[u8], elf64_shdr>,
+named!(parse_elf_section_header64<&[u8], Elf64_Shdr>,
     do_parse!(
         sh_name: le_u32 >>
         sh_type: le_u32 >>
@@ -518,7 +621,7 @@ named!(parse_elf_section_header64<&[u8], elf64_shdr>,
         sh_info: le_u32 >>
         sh_addralign: le_u64 >>
         sh_entsize: le_u64 >>
-        (elf64_shdr {
+        (Elf64_Shdr {
             sh_name: sh_name,
             sh_type: sh_type,
             sh_flags: sh_flags,

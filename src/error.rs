@@ -25,13 +25,13 @@ pub enum RustepErrorKind {
     #[fail(display = "Not enough byte, unknown bytes needed")]
     IncompleteUnknown,
     #[fail(display = "Segment type {} not resolved", _0)]
-    SegmentType(usize),
+    SegmentType(u64),
     #[fail(display = "Section type {} not resolved", _0)]
-    SectionType(usize),
+    SectionType(u64),
     #[fail(display = "Segment flag {} invalid", _0)]
-    SegmentFlag(usize),
+    SegmentFlag(u64),
     #[fail(display = "Section flag {} invalid", _0)]
-    SectionFlag(usize),
+    SectionFlag(u64),
 }
 
 impl Fail for RustepError {

@@ -16,7 +16,6 @@ extern crate num_derive;
 pub mod error;
 pub mod parser;
 pub mod format;
-pub mod structure;
 
 
 #[cfg(test)]
