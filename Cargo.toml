@@ -1,0 +1,16 @@
+[package]
+name = "rustep"
+version = "0.1.0"
+authors = ["Anciety <ding641880047@126.com>"]
+
+[build-dependencies]
+bindgen = "0.33.2"
+
+[dependencies]
+nom = "^3.2.1"
+failure = "^0.1.1"
+enumflags = "*"
+enumflags_derive = "*"
+num = "*"
+num-derive = "0.2"
+num-traits = "0.2"
