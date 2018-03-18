@@ -82,6 +82,7 @@ impl From<Context<RustepErrorKind>> for RustepError {
 /// let res_noerr = nom_try!(res); // The Done part of nom will be extracted
 /// ```
 macro_rules! nom_try {
+
     ($arg:expr) => {
         match $arg {
             Done(_i, res) => {
