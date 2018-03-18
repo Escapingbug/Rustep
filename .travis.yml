@@ -12,61 +12,93 @@ sudo: required
 env:
   global:
     # TODO Update this to match the name of your project.
-    - CRATE_NAME=trust
+    - CRATE_NAME=rustep
+    - LIBCLANG_PATH=/usr/lib/x86_64-linux-gnu/libclang.so
 
 matrix:
   # TODO These are all the build jobs. Adjust as necessary. Comment out what you
   # don't need
   include:
     # Android
-    - env: TARGET=aarch64-linux-android DISABLE_TESTS=1
-    - env: TARGET=arm-linux-androideabi DISABLE_TESTS=1
-    - env: TARGET=armv7-linux-androideabi DISABLE_TESTS=1
-    - env: TARGET=i686-linux-android DISABLE_TESTS=1
-    - env: TARGET=x86_64-linux-android DISABLE_TESTS=1
+    #- env: TARGET=aarch64-linux-android DISABLE_TESTS=1
+    #  rust: nightly
+    #- env: TARGET=arm-linux-androideabi DISABLE_TESTS=1
+    #  rust: nightly
+    #- env: TARGET=armv7-linux-androideabi DISABLE_TESTS=1
+    #  rust: nightly
+    #- env: TARGET=i686-linux-android DISABLE_TESTS=1
+    #  rust: nightly
+    #- env: TARGET=x86_64-linux-android DISABLE_TESTS=1
+    #  rust: nightly
 
     # iOS
-    - env: TARGET=aarch64-apple-ios DISABLE_TESTS=1
-      os: osx
-    - env: TARGET=armv7-apple-ios DISABLE_TESTS=1
-      os: osx
-    - env: TARGET=armv7s-apple-ios DISABLE_TESTS=1
-      os: osx
-    - env: TARGET=i386-apple-ios DISABLE_TESTS=1
-      os: osx
-    - env: TARGET=x86_64-apple-ios DISABLE_TESTS=1
-      os: osx
+    #- env: TARGET=aarch64-apple-ios DISABLE_TESTS=1
+    #  os: osx
+    #  rust: nightly
+    #- env: TARGET=armv7-apple-ios DISABLE_TESTS=1
+    #  os: osx
+    #  rust: nightly
+    #- env: TARGET=armv7s-apple-ios DISABLE_TESTS=1
+    #  os: osx
+    #  rust: nightly
+    #- env: TARGET=i386-apple-ios DISABLE_TESTS=1
+    #  os: osx
+    #  rust: nightly
+    #- env: TARGET=x86_64-apple-ios DISABLE_TESTS=1
+    #  os: osx
+    #  rust: nightly
 
     # Linux
     - env: TARGET=aarch64-unknown-linux-gnu
+      rust: nightly
     - env: TARGET=arm-unknown-linux-gnueabi
+      rust: nightly
     - env: TARGET=armv7-unknown-linux-gnueabihf
-    - env: TARGET=i686-unknown-linux-gnu
-    - env: TARGET=i686-unknown-linux-musl
+      rust: nightly
+      #- env: TARGET=i686-unknown-linux-gnu
+      #rust: nightly
+      #- env: TARGET=i686-unknown-linux-musl
+      #rust: nightly
     - env: TARGET=mips-unknown-linux-gnu
+      rust: nightly
     - env: TARGET=mips64-unknown-linux-gnuabi64
+      rust: nightly
     - env: TARGET=mips64el-unknown-linux-gnuabi64
+      rust: nightly
     - env: TARGET=mipsel-unknown-linux-gnu
+      rust: nightly
     - env: TARGET=powerpc-unknown-linux-gnu
+      rust: nightly
     - env: TARGET=powerpc64-unknown-linux-gnu
+      rust: nightly
     - env: TARGET=powerpc64le-unknown-linux-gnu
+      rust: nightly
     - env: TARGET=s390x-unknown-linux-gnu DISABLE_TESTS=1
+      rust: nightly
     - env: TARGET=x86_64-unknown-linux-gnu
+      rust: nightly
     - env: TARGET=x86_64-unknown-linux-musl
+      rust: nightly
 
     # OSX
-    - env: TARGET=i686-apple-darwin
-      os: osx
+    #- env: TARGET=i686-apple-darwin
+    #  os: osx
+    #  rust: nightly
     - env: TARGET=x86_64-apple-darwin
       os: osx
+      rust: nightly
 
     # *BSD
-    - env: TARGET=i686-unknown-freebsd DISABLE_TESTS=1
+    #- env: TARGET=i686-unknown-freebsd DISABLE_TESTS=1
+    #  rust: nightly
     - env: TARGET=x86_64-unknown-freebsd DISABLE_TESTS=1
+      rust: nightly
     - env: TARGET=x86_64-unknown-netbsd DISABLE_TESTS=1
+      rust: nightly
 
     # Windows
     - env: TARGET=x86_64-pc-windows-gnu
+      rust: nightly
 
     # Bare metal
     # These targets don't support std and as such are likely not suitable for
@@ -77,11 +109,11 @@ matrix:
     # - env: TARGET=thumbv7m-none-eabi
 
     # Testing other channels
-    - env: TARGET=x86_64-unknown-linux-gnu
-      rust: nightly
-    - env: TARGET=x86_64-apple-darwin
-      os: osx
-      rust: nightly
+    # - env: TARGET=x86_64-unknown-linux-gnu
+    #  rust: nightly
+    # - env: TARGET=x86_64-apple-darwin
+    #  os: osx
+    #  rust: nightly
 
 before_install:
   - set -e
@@ -105,15 +137,16 @@ deploy:
   # - Encrypt it: `travis encrypt 0123456789012345678901234567890123456789
   # - Paste the output down here
   api_key:
-    secure: A9v3PIzQQ4U08OHFmDPQzNXbNHEb7YHyLXCvMF+dXFuNSvhUNlmQYykxqUf3dvikhJL2/bsZ14umm7ni7fQh0tGwJ4+lPpNzYAcweGgNXnWvjTpY6ovuRbr3gs4/srkyxp/GBDmSW5L8wFN3hKCB+Lm0YnIPB9IA2afP8a30+8VTXT9nv7pNqGny4ilN41ycr4DZi3sQoXdbruy7ClN7gsWW/GUiudBccHVIjmTapOFKLwZHODaUl/1/RDWQzh+i+17e1ivXuJPktDSrqmHPTZ15OjklnHKd6t179ry6VkGRg4R/R/YukVIqGzeaXGWAwdAQ5gE8cjGZghJLVi2jkDBJ85z8MvT+zLZLyliiuhLc/X8y7mkE1n0FKFtXXzFVt0l7V1LaEKbIbiV6XX3jsir4qgkqWjPHBZqO5mkGNFS16Dmt30/ZtEPAzXiINFXbWuWrpQ/LZ4NSto8IMrRTcoyDbAga/KYxJiNIeVuCe1E9dbytDM7K0GLtxJTul/WnnSeI6r//EFyC4bxYjyHhCXaag4q14KM+ak4rB0QgxsYzyGuh2MqyCoVj8YJLjLdKnL/SV7W7LPD40xlxvI6VCYTVi2ILHwL6vCxpukXYteX0c5IAIWkISDKu6nNBEgmCHXXPSqYSrgE5g7/QoCQHI8++nR8iKe0s7TWxZRydby8=
-  file_glob: true
+    secure: wGXYM/OalvYwvKNOGwsXsFJfeNUQ6x7d9FtqyRZHBwM6Hxq3YhUW3Cv4IjEzxrT8D3keP/cj8YctVtlKunq8ZRJAQOKwUXy+Jsxg0zcmnJ7BB+e+tu018RPtgraPf6F7+0cez/p+TNgDRl8Cbk0w3RLNHc681t75PRRzeSsI0iKc+N1wpVTwvKMQLBQz4n6Ki5Mm5l86aTfTxWlygUOBxnUfuAno7DGOEukgaZG2+JrYWhEgSiO8KA3Dc5BJgimvZ/3uBtFgpdQFOpdlG1OniddTUF05YKYr7kzMxxE04TBWR+6SvZih+CT5rGzu8pYHDq6WZvmAC0IakRTMN25BzW9boehCWPrbzZW/+P6cxcTn6CbvC+Ct2IZxBh1DuPEHHsdZWx3n+wb4i3ZRJHQzx3hsLlgLk2M4VemTSA9MXykIhwMt1j1xvewD+jlvRilnUi3HXwYbvVTXjI5d9X7DVj839ez6wkaMHbNw873QUsMF7i1OXfuoyhzRREhUQboLmNNfaGaXakBC1RoKL8NCron4iA0qTVDE2xFNRoOjvTxLvdGZnAGvdHvQ5H9X33WzKzd87NyoB4GMCU2a/8eocnDtDFAQBe532V/yk6dXlc28E6kLbyD0jsGxxrpTFZBJtcIHN7xd8UqC3XcgDkm+5QDjA9v0qP5mgnXpQNAfWpM= 
+    file_glob: true
   file: $CRATE_NAME-$TRAVIS_TAG-$TARGET.*
   on:
     # TODO Here you can pick which targets will generate binary releases
     # In this example, there are some targets that are tested using the stable
     # and nightly channels. This condition makes sure there is only one release
     # for such targets and that's generated using the stable channel
-    condition: $TRAVIS_RUST_VERSION = stable
+    #condition: $TRAVIS_RUST_VERSION = nightly
+    condition: never
     tags: true
   provider: releases
   skip_cleanup: true

@@ -1,7 +1,18 @@
 [package]
 name = "rustep"
-version = "0.1.0"
+version = "0.1.1"
 authors = ["Anciety <ding641880047@126.com>"]
+description = "Rust Executable file Parser"
+
+repository = "https://github.com/Escapingbug/Rustep"
+
+readme = "README.md"
+keywords = ["ELF", "Executable"]
+license-file = "LICENSE"
+
+[badges]
+travis-ci = { repository = "https://travis-ci.org/Escapingbug/Rustep", branch = "master"}
+maintenance = { status = "actively-developed" }
 
 [build-dependencies]
 bindgen = "0.33.2"
@@ -9,8 +20,8 @@ bindgen = "0.33.2"
 [dependencies]
 nom = "^3.2.1"
 failure = "^0.1.1"
-enumflags = "*"
-enumflags_derive = "*"
-num = "*"
+enumflags = "^0.3.0"
+enumflags_derive = "^0.4.0"
+num = "^0.1.42"
 num-derive = "0.2"
 num-traits = "0.2"

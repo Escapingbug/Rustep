@@ -33,15 +33,16 @@ impl<'a> Executable<'a> {
     /// ```
     /// use std::fs::File;
     /// use std::io::prelude::*;
+    /// use rustep::format::executable::Executable;
     ///
-    /// let mut file = File.open("test/test").unwrap();
+    /// let mut file = File::open("test/test").unwrap();
     /// let mut buf = Vec::new();
     /// file.read_to_end(&mut buf).unwrap();
     ///
     /// let res = Executable::from_u8_array(&buf).unwrap(); // This should be a Executable::Elf64
     /// // You can match it to get the internal structure
     /// match res {
-    ///     Executable::Elf64(elf) => { // Do something with elf },
+    ///     Executable::Elf64(elf) => {}, // Do something with the elf
     ///     _ => { panic!("Wrong file format detected") },
     /// }
     /// ```
