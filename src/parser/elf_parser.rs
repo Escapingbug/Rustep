@@ -18,72 +18,105 @@ pub fn parse_elf(input: &[u8]) -> Result<Executable, Error> {
     }
 }
 
-pub fn parse_elf32(input: &[u8]) -> Result<Executable, Error> {
-    let hdr = nom_try!(parse_elf_header32(input));
-    let mut segments = Vec::new();
-    let mut sections = Vec::new();
-    let program_headers = nom_try!(preceded!(
-        input,
-        take!(hdr.e_phoff),
-        count!(call!(parse_elf_prog_header32), hdr.e_phnum as usize)
-    ));
-    for p in program_headers.iter() {
-        let data = &input[(p.p_offset as usize)..(p.p_offset + p.p_filesz) as usize];
-        let segment_type = FromPrimitive::from_u32(p.p_type)
-            .ok_or(RustepErrorKind::SegmentType(p.p_type as u64))?;
-        let flags = BitFlags::from_bits(p.p_flags as u64)
-            .ok_or(RustepErrorKind::SegmentFlag(p.p_flags as u64))?;
-        let segment = ElfSegment32 {
-            phdr: *p,
-            segment_type: segment_type,
-            flags: flags,
-            data: data
-        };
-
-        segments.push(segment);
-    }
-    let section_headers = nom_try!(preceded!(
-        input,
-        take!(hdr.e_shoff),
-        count!(call!(parse_elf_section_header32), hdr.e_shnum as usize)
-    ));
-    for s in section_headers.iter() {
-        let data = &input[(s.sh_offset as usize) .. (s.sh_offset + s.sh_size) as usize];
-        let section_type = FromPrimitive::from_u32(s.sh_type)
-            .ok_or(RustepErrorKind::SectionType(s.sh_type as u64))?;
-        let flags = BitFlags::from_bits(s.sh_flags as u64)
-            .ok_or(RustepErrorKind::SectionFlag(s.sh_flags as u64))?;
-        let name = String::new();
-
-        let section = ElfSection32 {
-            name: name,
-            shdr: *s,
-            section_type: section_type,
-            flags: flags,
-            data: data
-        };
-
-        sections.push(section);
-    }
-
-    let strtab_data = sections
-        .get(hdr.e_shstrndx as usize)
-        .map(|s| s.data);
-    if let Some(data) = strtab_data {
-        for s in sections.iter_mut() {
-            let name_bytes = nom_try!(take_until!(&data[s.shdr.sh_name as usize..], b"\x00" as &[u8]));
-            let mut new_name = String::from_utf8(name_bytes.to_vec())?;
-            mem::replace(&mut s.name, new_name);
+macro_rules! define_elf_parser {
+    (
+        $func_name: ident,
+        $header_parser: ident,
+        $section_parser: ident,
+        $segment_parser: ident,
+        $section: ident,
+        $segment: ident,
+        $result: ident
+        ) => {
+            pub fn $func_name(input: &[u8]) -> Result<Executable, Error> {
+                let hdr = nom_try!($header_parser(input));
+                let mut segments = Vec::new();
+                let mut sections = Vec::new();
+                let program_headers = nom_try!(preceded!(
+                    input,
+                    take!(hdr.e_phoff),
+                    count!(call!($segment_parser), hdr.e_phnum as usize)
+                ));
+                for p in program_headers.iter() {
+                    let data = &input[(p.p_offset as usize)..(p.p_offset + p.p_filesz) as usize];
+                    let segment_type = FromPrimitive::from_u32(p.p_type)
+                        .ok_or(RustepErrorKind::SegmentType(p.p_type as u64))?;
+                    let flags = BitFlags::from_bits(p.p_flags as u64)
+                        .ok_or(RustepErrorKind::SegmentFlag(p.p_flags as u64))?;
+                    let segment = $segment {
+                        phdr: *p,
+                        segment_type: segment_type,
+                        flags: flags,
+                        data: data
+                    };
+            
+                    segments.push(segment);
+                }
+                let section_headers = nom_try!(preceded!(
+                    input,
+                    take!(hdr.e_shoff),
+                    count!(call!($section_parser), hdr.e_shnum as usize)
+                ));
+                for s in section_headers.iter() {
+                    let data = &input[(s.sh_offset as usize) .. (s.sh_offset + s.sh_size) as usize];
+                    let section_type = FromPrimitive::from_u32(s.sh_type)
+                        .ok_or(RustepErrorKind::SectionType(s.sh_type as u64))?;
+                    let flags = BitFlags::from_bits(s.sh_flags as u64)
+                        .ok_or(RustepErrorKind::SectionFlag(s.sh_flags as u64))?;
+                    let name = String::new();
+            
+                    let section = $section {
+                        name: name,
+                        shdr: *s,
+                        section_type: section_type,
+                        flags: flags,
+                        data: data
+                    };
+            
+                    sections.push(section);
+                }
+            
+                let strtab_data = sections
+                    .get(hdr.e_shstrndx as usize)
+                    .map(|s| s.data);
+                if let Some(data) = strtab_data {
+                    for s in sections.iter_mut() {
+                        let name_bytes = nom_try!(take_until!(&data[s.shdr.sh_name as usize..], b"\x00" as &[u8]));
+                        let mut new_name = String::from_utf8(name_bytes.to_vec())?;
+                        mem::replace(&mut s.name, new_name);
+                    }
+                }
+            
+                let struct_ins = $result {
+                    header: hdr,
+                    sections: sections,
+                    segments: segments,
+                };
+                Ok(Executable::$result(struct_ins))
+            }
         }
-    }
-
-    let struct32 = Elf32 {
-        header: hdr,
-        sections: sections,
-        segments: segments,
-    };
-    Ok(Executable::Elf32(struct32))
 }
+
+// TODO Refactor this when `Rust`'s contant generic is done.
+// I really don't want to write duplicate code, macro is my final option to avoid that.
+define_elf_parser!(
+    parse_elf32,
+    parse_elf_header32,
+    parse_elf_section_header32,
+    parse_elf_prog_header32,
+    ElfSection32,
+    ElfSegment32,
+    Elf32
+);
+define_elf_parser!(
+    parse_elf64,
+    parse_elf_header64,
+    parse_elf_section_header64,
+    parse_elf_prog_header64,
+    ElfSection64,
+    ElfSegment64,
+    Elf64
+);
 
 #[test]
 fn test_parse_elf32() {
@@ -120,78 +153,6 @@ fn test_parse_elf32() {
         },
         _ => panic!("Wrong file format detection"),
     };
-}
-
-pub fn parse_elf64(input: &[u8]) -> Result<Executable, Error> {
-    let hdr = nom_try!(parse_elf_header64(input));
-    let mut segments = Vec::new();
-    let mut sections = Vec::new();
-    let program_headers = nom_try!(preceded!(
-        input,
-        take!(hdr.e_phoff),
-        count!(call!(parse_elf_prog_header64), hdr.e_phnum as usize)
-    ));
-
-    for p in program_headers.iter() {
-        let data = &input[(p.p_offset as usize)..(p.p_offset + p.p_filesz) as usize];
-        println!("seg type {:x}", p.p_type);
-        let segment_type = FromPrimitive::from_u32(p.p_type)
-            .ok_or(RustepErrorKind::SegmentType(p.p_type as u64))?;
-        let flags = BitFlags::from_bits(p.p_flags as u64)
-            .ok_or(RustepErrorKind::SegmentFlag(p.p_flags as u64))?;
-        let segment = ElfSegment64 {
-            phdr: *p,
-            segment_type: segment_type,
-            flags: flags,
-            data: data
-        };
-
-        segments.push(segment);
-    }
-
-    let section_headers = nom_try!(preceded!(
-        input,
-        take!(hdr.e_shoff),
-        count!(call!(parse_elf_section_header64), hdr.e_shnum as usize)
-    ));
-
-    for s in section_headers.iter() {
-        let data = &input[(s.sh_offset as usize) .. (s.sh_offset + s.sh_size) as usize];
-        let section_type = FromPrimitive::from_u32(s.sh_type)
-            .ok_or(RustepErrorKind::SectionType(s.sh_type as u64))?;
-        let flags = BitFlags::from_bits(s.sh_flags as u64)
-            .ok_or(RustepErrorKind::SectionFlag(s.sh_flags as u64))?;
-        let mut name = String::new();
-
-        let section = ElfSection64 {
-            name: name,
-            shdr: *s,
-            section_type: section_type,
-            flags: flags,
-            data: data
-        };
-
-        sections.push(section);
-    }
-
-    let strtab_data = sections
-        .get(hdr.e_shstrndx as usize)
-        .map(|s| s.data);
-
-    if let Some(data) = strtab_data {
-        for s in sections.iter_mut() {
-            let name_bytes = nom_try!(take_until!(&data[s.shdr.sh_name as usize..], b"\x00" as &[u8]));
-            let new_name = String::from_utf8(name_bytes.to_vec())?;
-            mem::replace(&mut s.name, new_name);
-        }
-    }
-
-    let struct64 = Elf64 {
-        header: hdr,
-        sections: sections,
-        segments: segments,
-    };
-    Ok(Executable::Elf64(struct64))
 }
 
 #[test]
