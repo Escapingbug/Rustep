@@ -89,6 +89,8 @@ macro_rules! define_elf_parser {
             
                 let struct_ins = $result {
                     header: hdr,
+                    elf_type: FromPrimitive::from_u16(hdr.e_type)
+                        .ok_or(RustepErrorKind::ElfType(hdr.e_type as u64))?,
                     sections: sections,
                     segments: segments,
                 };
@@ -187,6 +189,8 @@ fn test_parse_elf() {
             assert_eq!(segment.p_memsz, 504);
             assert_eq!(segment.p_flags, 5);
             assert_eq!(segment.p_align, 8);
+
+            assert_eq!(res.elf_type, ElfType::ET_DYN);
         },
         _ => panic!("Wrong file format detection"),
     };
@@ -219,6 +223,8 @@ fn test_parse_elf() {
             assert_eq!(segment.p_memsz, 288);
             assert_eq!(segment.p_flags, 5);
             assert_eq!(segment.p_align, 4);
+
+            assert_eq!(res.elf_type, ElfType::ET_DYN);
         },
         _ => panic!("Wrong file format detection"),
     };

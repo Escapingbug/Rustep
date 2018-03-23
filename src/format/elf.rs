@@ -5,6 +5,19 @@
 pub use format::bindings::*;
 use enumflags::BitFlags;
 
+#[derive(FromPrimitive, ToPrimitive, Eq, PartialEq, Debug)]
+pub enum ElfType {
+     ET_REL = 1,
+     ET_EXEC = 2,
+     ET_DYN = 3,
+     ET_CORE = 4,
+     ET_NUM = 5,
+     ET_LOOS = 65024,
+     ET_HIOS = 65279,
+     ET_LOPROC = 65280,
+     ET_HIPROC = 65535,
+}
+
 #[derive(FromPrimitive, ToPrimitive, Eq, PartialEq)]
 pub enum SegmentType {
     PT_NULL = 0,
@@ -132,6 +145,7 @@ pub struct ElfSegment64<'a> {
 /// Elf file format 32-bit version
 pub struct Elf32<'a> {
     pub header: Elf32_Ehdr,
+    pub elf_type: ElfType,
     pub segments: Vec<ElfSegment32<'a>>,
     pub sections: Vec<ElfSection32<'a>>,
 }
@@ -140,6 +154,7 @@ pub struct Elf32<'a> {
 /// Elf file format 64-bit version
 pub struct Elf64<'a> {
     pub header: Elf64_Ehdr,
+    pub elf_type: ElfType,
     pub segments: Vec<ElfSegment64<'a>>,
     pub sections: Vec<ElfSection64<'a>>,
 }
