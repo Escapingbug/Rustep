@@ -19,7 +19,7 @@ pub fn parse_elf(input: &[u8]) -> Result<Executable, Error> {
 }
 
 macro_rules! define_elf_parser {
-    (
+    {
         $func_name: ident,
         $header_parser: ident,
         $section_parser: ident,
@@ -27,7 +27,7 @@ macro_rules! define_elf_parser {
         $section: ident,
         $segment: ident,
         $result: ident
-        ) => {
+    } => {
             pub fn $func_name(input: &[u8]) -> Result<Executable, Error> {
                 let hdr = nom_try!($header_parser(input));
                 let mut segments = Vec::new();
@@ -99,7 +99,7 @@ macro_rules! define_elf_parser {
 
 // TODO Refactor this when `Rust`'s contant generic is done.
 // I really don't want to write duplicate code, macro is my final option to avoid that.
-define_elf_parser!(
+define_elf_parser!{
     parse_elf32,
     parse_elf_header32,
     parse_elf_section_header32,
@@ -107,8 +107,8 @@ define_elf_parser!(
     ElfSection32,
     ElfSegment32,
     Elf32
-);
-define_elf_parser!(
+}
+define_elf_parser!{
     parse_elf64,
     parse_elf_header64,
     parse_elf_section_header64,
@@ -116,7 +116,7 @@ define_elf_parser!(
     ElfSection64,
     ElfSegment64,
     Elf64
-);
+}
 
 #[test]
 fn test_parse_elf32() {
