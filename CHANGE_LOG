@@ -1,0 +1,10 @@
+# 0.1.2
+## Usage
+* Now parsers are integrated into format
+* Now most functions can be used through some traits provided. These are done by using dynamic
+dispatch, so full struct may be shadowed. But this provide universal interface totally ignoring
+32-bit and 64-bit differences.
+
+## Internal
+* macros are used when define the parser of elf 32 version and 64 version.
+* Use trait to provide functionalities

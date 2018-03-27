@@ -1,0 +1,3 @@
+# 0.1.1 ~ 0.1.2
+* [x] avoid the duplicate code of elf parsers when dealing with two versions of elf format 
+* [ ] use trait as the main interface of the structure instead of access the data directly
