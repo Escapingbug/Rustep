@@ -43,7 +43,7 @@ extern crate num_derive;
 
 #[macro_use]
 pub mod error;
-pub mod parser;
+//pub mod parser;
 pub mod format;
 
 

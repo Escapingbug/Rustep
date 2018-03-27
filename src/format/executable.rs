@@ -1,8 +1,8 @@
-use parser::elf_parser::parse_elf;
 use failure::Error;
 use format::elf::{
     Elf32,
     Elf64,
+    parse_elf,
 };
 use nom::{
     *,
