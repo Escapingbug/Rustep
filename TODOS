@@ -1,0 +1,6 @@
+# 0.1.1 ~ 0.1.2
+* [x] avoid the duplicate code of elf parsers when dealing with two versions of elf format 
+* [x] use trait as the main interface of the structure instead of access the data directly. (Partially done. Elf header and elf itself not complete.)
+
+# 0.1.2 ~ 0.1.3
+* [ ] provide more information from ELF(got table, symbol table, etc.)

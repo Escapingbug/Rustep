@@ -32,6 +32,12 @@ pub enum RustepErrorKind {
     SegmentFlag(u64),
     #[fail(display = "Section flag {} invalid", _0)]
     SectionFlag(u64),
+    #[fail(display = "Unknown elf type {}", _0)]
+    ElfType(u64),
+    #[fail(display = "Unknown elf machine {}", _0)]
+    ElfMachine(u64),
+    #[fail(display = "Not an Elf file")]
+    NotElf,
 }
 
 impl Fail for RustepError {

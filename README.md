@@ -11,6 +11,7 @@ Note: Only 64 bit OS is supported.
 
 # Current Progress
 * [x] `ELF` file format support
+* [ ] more `ELF` info to extract
 * [ ] `PE` file format support
 * [ ] `macho` file format support
 * [ ] DWARF support
