@@ -1,8 +1,14 @@
 //! Definition of overall elf file format and Reexports bindings as low level implementation 
 //! of elf file format for it has a complete header already described the file format 
 //! structure overall.
-pub use format::bindings::*;
-use std::mem;
+use format::bindings::*;
+use std::{
+    mem,
+    convert::{
+        TryFrom,
+        TryInto,
+    },
+};
 use nom::{IResult, IResult::*, Needed::{Size, Unknown}, *};
 use failure::Error;
 use error::RustepErrorKind;
@@ -10,7 +16,8 @@ use format::executable::Executable;
 use num::FromPrimitive;
 use enumflags::BitFlags;
 
-#[derive(FromPrimitive, ToPrimitive, Eq, PartialEq, Debug)]
+/// Elf types, refer to `ELF`'s `e_type`
+#[derive(FromPrimitive, ToPrimitive, Eq, PartialEq, Clone, Copy, Debug)]
 pub enum ElfType {
      ET_REL = 1,
      ET_EXEC = 2,
@@ -23,6 +30,7 @@ pub enum ElfType {
      ET_HIPROC = 65535,
 }
 
+/// Elf segment type, refer to `segment`'s `p_type`
 #[derive(FromPrimitive, ToPrimitive, Eq, PartialEq)]
 pub enum SegmentType {
     PT_NULL = 0,
@@ -47,6 +55,7 @@ pub enum SegmentType {
     PT_HIPROC = 2147483647,
 }
 
+/// Elf segment's flag. Refer to `segment`'s `p_flags`
 #[derive(EnumFlags, Copy, Clone, Debug)]
 #[repr(u64)]
 pub enum SegmentFlag {
@@ -57,6 +66,7 @@ pub enum SegmentFlag {
     PF_MASKPROC = 4026531840,
 }
 
+/// Elf section's type referring to `section`'s `sh_type`
 #[derive(FromPrimitive, ToPrimitive, Eq, PartialEq)]
 pub enum SectionType {
      SHT_NULL = 0,
@@ -97,6 +107,7 @@ pub enum SectionType {
      SHT_HIUSER = 2415919103,
 }
 
+/// Elf section's type referring to `section`'s `sh_flags`
 #[derive(EnumFlags, Copy, Clone, Debug)]
 #[repr(u64)]
 pub enum SectionFlag {
@@ -183,7 +194,7 @@ pub trait ElfSection {
 /// 32-bit Elf Section representation
 pub struct ElfSection32<'a> {
     /// Internal Shdr. If you only need the functionality provided, just use the getter.
-    pub shdr: Elf32_Shdr,
+    shdr: Elf32_Shdr,
     section_type: SectionType,
     flags: BitFlags<SectionFlag>,
     name: String,
@@ -193,7 +204,7 @@ pub struct ElfSection32<'a> {
 /// 64-bit ElfSection representation
 pub struct ElfSection64<'a> {
     /// Internal Shdr. If you only need the functionality provided, just use the getter.
-    pub shdr: Elf64_Shdr,
+    shdr: Elf64_Shdr,
     section_type: SectionType,
     flags: BitFlags<SectionFlag>,
     name: String,
@@ -299,6 +310,7 @@ impl ElfSegmentHeader for Elf64_Phdr {
     }
 }
 
+/// providing universal functionality of `Elf` segment
 pub trait ElfSegment {
     /// internal phdr access, note that this method only provide functionalities, since it
     /// uses dynamic dispatch.
@@ -314,7 +326,7 @@ pub trait ElfSegment {
 /// 32-bit version Elf Segment representation.
 pub struct ElfSegment32<'a> {
     /// Internal phdr of the segment, full struct
-    pub phdr: Elf32_Phdr,
+    phdr: Elf32_Phdr,
     segment_type: SegmentType,
     flags: BitFlags<SegmentFlag>,
     data: &'a [u8],
@@ -323,7 +335,7 @@ pub struct ElfSegment32<'a> {
 /// 64-bit version Elf Segment representation
 pub struct ElfSegment64<'a> {
     /// Internal phdr of the segment, full struct
-    pub phdr: Elf64_Phdr,
+    phdr: Elf64_Phdr,
     segment_type: SegmentType,
     flags: BitFlags<SegmentFlag>,
     data: &'a [u8],
@@ -365,29 +377,421 @@ impl<'a> ElfSegment for ElfSegment64<'a> {
     }
 }
 
+/// Elf machine type, referring to `e_machine` in `ELF` header
+#[derive(FromPrimitive, ToPrimitive, Eq, PartialEq)]
+#[repr(u64)]
+pub enum ElfMachine {
+    /// Nomachine
+    NONE = 0,
+    /// AT&T WE32100
+    M32 = 1,
+    /// SPARC
+    SPARC = 2,
+    /// Intel80386
+    I386 = 3,
+    /// Motorola68000
+    M68K = 4,
+    /// Motorola88000
+    M88K = 5,
+    /// Intel80860
+    I860 = 7,
+    /// MIPS IArchitecture
+    MIPS = 8,
+    /// IBM System/370Processor
+    S370 = 9,
+    /// MIPS RS3000Little-endian
+    MIPS_RS3_LE = 10,
+    /// Hewlett-PackardPA-RISC
+    PARISC = 15,
+    /// FujitsuVPP500
+    VPP500 = 17,
+    /// Enhanced instruction setSPARC
+    SPARC32PLUS = 18,
+    /// Intel80960
+    I960 = 19,
+    /// PowerPC
+    PPC = 20,
+    /// 64-bitPowerPC
+    PPC64 = 21,
+    /// IBM System/390Processor
+    S390 = 22,
+    /// NECV800
+    V800 = 36,
+    /// FujitsuFR20
+    FR20 = 37,
+    /// TRWRH-32
+    RH32 = 38,
+    /// MotorolaRCE
+    RCE = 39,
+    /// Advanced RISC MachinesARM
+    ARM = 40,
+    /// DigitalAlpha
+    ALPHA = 41,
+    /// HitachiSH
+    SH = 42,
+    /// SPARC Version9
+    SPARCV9 = 43,
+    /// Siemens TriCore embeddedprocessor
+    TRICORE = 44,
+    /// Argonaut RISC Core, Argonaut TechnologiesInc.
+    ARC = 45,
+    /// HitachiH8/300
+    H8_300 = 46,
+    /// HitachiH8/300H
+    H8_300H = 47,
+    /// HitachiH8S
+    H8S = 48,
+    /// HitachiH8/500
+    H8_500 = 49,
+    /// Intel IA-64 processorarchitecture
+    IA_64 = 50,
+    /// StanfordMIPS-X
+    MIPS_X = 51,
+    /// MotorolaColdFire
+    COLDFIRE = 52,
+    /// MotorolaM68HC12
+    M68HC12 = 53,
+    /// Fujitsu MMA MultimediaAccelerator
+    MMA = 54,
+    /// SiemensPCP
+    PCP = 55,
+    /// Sony nCPU embedded RISCprocessor
+    NCPU = 56,
+    /// Denso NDR1microprocessor
+    NDR1 = 57,
+    /// Motorola Star*Coreprocessor
+    STARCORE = 58,
+    /// Toyota ME16processor
+    ME16 = 59,
+    /// STMicroelectronics ST100processor
+    ST100 = 60,
+    /// Advanced Logic Corp. TinyJ embedded processorfamily
+    TINYJ = 61,
+    /// AMD x86-64architecture
+    X86_64 = 62,
+    /// Sony DSPProcessor
+    PDSP = 63,
+    /// Digital Equipment Corp.PDP-10
+    PDP10 = 64,
+    /// Digital Equipment Corp.PDP-11
+    PDP11 = 65,
+    /// Siemens FX66microcontroller
+    FX66 = 66,
+    /// STMicroelectronics ST9+ 8/16 bitmicrocontroller
+    ST9PLUS = 67,
+    /// STMicroelectronics ST7 8-bitmicrocontroller
+    ST7 = 68,
+    /// Motorola MC68HC16Microcontroller
+    M68HC16 = 69,
+    /// Motorola MC68HC11Microcontroller
+    M68HC11 = 70,
+    /// Motorola MC68HC08Microcontroller
+    M68HC08 = 71,
+    /// Motorola MC68HC05Microcontroller
+    M68HC05 = 72,
+    /// Silicon GraphicsSVx
+    SVX = 73,
+    /// STMicroelectronics ST19 8-bitmicrocontroller
+    ST19 = 74,
+    /// DigitalVAX
+    VAX = 75,
+    /// Axis Communications 32-bit embeddedprocessor
+    CRIS = 76,
+    /// Infineon Technologies 32-bit embeddedprocessor
+    JAVELIN = 77,
+    /// Element 14 64-bit DSPProcessor
+    FIREPATH = 78,
+    /// LSI Logic 16-bit DSPProcessor
+    ZSP = 79,
+    /// Donald Knuth's educational 64-bitprocessor
+    MMIX = 80,
+    /// Harvard University machine-independent objectfiles
+    HUANY = 81,
+    /// SiTeraPrism
+    PRISM = 82,
+    /// Atmel AVR 8-bitmicrocontroller
+    AVR = 83,
+    /// FujitsuFR30
+    FR30 = 84,
+    /// MitsubishiD10V
+    D10V = 85,
+    /// MitsubishiD30V
+    D30V = 86,
+    /// NECv850
+    V850 = 87,
+    /// MitsubishiM32R
+    M32R = 88,
+    /// MatsushitaMN10300
+    MN10300 = 89,
+    /// MatsushitaMN10200
+    MN10200 = 90,
+    /// picoJava
+    PJ = 91,
+    /// OpenRISC 32-bit embeddedprocessor
+    OPENRISC = 92,
+    /// ARC CoresTangent-A5
+    ARC_A5 = 93,
+    /// Tensilica XtensaArchitecture
+    XTENSA = 94,
+    /// Alphamosaic VideoCoreprocessor
+    VIDEOCORE = 95,
+    /// Thompson Multimedia General PurposeProcessor
+    TMM_GPP = 96,
+    /// National Semiconductor 32000series
+    NS32K = 97,
+    /// Tenor Network TPCprocessor
+    TPC = 98,
+    /// Trebia SNP 1000processor
+    SNP1K = 99,
+    /// STMicroelectronics (www.st.com) ST200microcontroller
+    ST200 = 100,
+    /// Ubicom IP2xxx microcontrollerfamily
+    IP2K = 101,
+    /// MAXProcessor
+    MAX = 102,
+    /// National Semiconductor CompactRISCmicroprocessor
+    CR = 103,
+    /// FujitsuF2MC16
+    F2MC16 = 104,
+    /// Texas Instruments embedded microcontrollermsp430
+    MSP430 = 105,
+    /// Analog Devices Blackfin (DSP)processor
+    BLACKFIN = 106,
+    /// S1C33 Family of Seiko Epsonprocessors
+    SE_C33 = 107,
+    /// Sharp embeddedmicroprocessor
+    SEP = 108,
+    /// Arca RISCMicroprocessor
+    ARCA = 109,
+    /// Microprocessor series from PKU-Unity Ltd. and MPRC of PekingUniversity
+    UNICORE = 110,
+}
+
+/// Information provided by Elf header is provided by functions of this trait.
+pub trait ElfHeader {
+    /// Elf File type
+    fn elf_type(&self) -> Result<ElfType, Error>;
+    /// Elf machine
+    fn machine(&self) -> Result<ElfMachine, Error>;
+    /// Entry point
+    fn entry(&self) -> u64;
+    /// Program header offset
+    fn phoff(&self) -> u64;
+    /// Section header offset
+    fn shoff(&self) -> u64;
+    fn ehsize(&self) -> u64;
+    /// program header entry size
+    fn phentsize(&self) -> u64;
+    /// program header number
+    fn phnum(&self) -> u64;
+    /// section header entry size
+    fn shentsize(&self) -> u64;
+    /// section header number
+    fn shnum(&self) -> u64;
+    /// section header of string table index
+    fn shstrndx(&self) -> u64;
+}
+
+impl ElfHeader for Elf32_Ehdr {
+    fn elf_type(&self) -> Result<ElfType, Error> {
+        Ok(FromPrimitive::from_u16(self.e_type)
+            .ok_or(RustepErrorKind::ElfType(self.e_type as u64))?)
+    }
+
+    fn machine(&self) -> Result<ElfMachine, Error> {
+        Ok(FromPrimitive::from_u16(self.e_machine)
+            .ok_or(RustepErrorKind::ElfMachine(self.e_machine as u64))?)
+    }
+
+    fn entry(&self) -> u64 {
+        self.e_entry as u64
+    }
+
+    fn phoff(&self) -> u64 {
+        self.e_phoff as u64
+    }
+
+    fn shoff(&self) -> u64 {
+        self.e_shoff as u64
+    }
+
+    fn ehsize(&self) -> u64 {
+        self.e_ehsize as u64
+    }
+
+    fn phentsize(&self) -> u64 {
+        self.e_phentsize as u64
+    }
+
+    fn phnum(&self) -> u64 {
+        self.e_phnum as u64
+    }
+
+    fn shentsize(&self) -> u64 {
+        self.e_shentsize as u64
+    }
+
+    fn shnum(&self) -> u64 {
+        self.e_shnum as u64
+    }
+
+    fn shstrndx(&self) -> u64 {
+        self.e_shstrndx as u64
+    }
+}
+
+impl ElfHeader for Elf64_Ehdr {
+    fn elf_type(&self) -> Result<ElfType, Error> {
+        Ok(FromPrimitive::from_u16(self.e_type)
+            .ok_or(RustepErrorKind::ElfType(self.e_type as u64))?)
+    }
+
+    fn machine(&self) -> Result<ElfMachine, Error> {
+        Ok(FromPrimitive::from_u16(self.e_machine)
+            .ok_or(RustepErrorKind::ElfMachine(self.e_machine as u64))?)
+    }
+
+    fn entry(&self) -> u64 {
+        self.e_entry as u64
+    }
+
+    fn phoff(&self) -> u64 {
+        self.e_phoff as u64
+    }
+
+   fn shoff(&self) -> u64 {
+       self.e_shoff as u64
+    }
+
+   fn ehsize(&self) -> u64 {
+       self.e_ehsize as u64
+   }
+
+   fn phentsize(&self) -> u64 {
+       self.e_phentsize as u64
+   }
+
+   fn phnum(&self) -> u64 {
+       self.e_phnum as u64
+   }
+
+   fn shentsize(&self) -> u64 {
+       self.e_shentsize as u64
+   }
+
+   fn shnum(&self) -> u64 {
+       self.e_shnum as u64
+   }
+
+   fn shstrndx(&self) -> u64 {
+       self.e_shstrndx as u64
+   }
+}
+
 /// A trait representing the supported methods for a parsed ELF format.
 /// This is used as universal interface for Elf file format, some methods are useful when using
-/// those ignoring the 32 or 64 part.
+/// those ignoring the 32 or 64 part. The information provided by `ELF` header can be extracted 
+/// from the `ElfHeader` trait object which can be gained from `header()` method. 
+///
 pub trait ElfFormat {
+    /// Get trait object of header
+    fn header(&self) -> &ElfHeader;
+    /// all segments trait objects
+    fn segments(&self) -> Vec<&ElfSegment>;
+    /// all sections trait objects
+    fn sections(&self) -> Vec<&ElfSection>;
+    /// get some specific section with a given name
+    fn section(&self, name: &str) -> Option<&ElfSection> {
+        for sec in self.sections().iter() {
+            if sec.name() == name {
+                return Some(*sec)
+            }
+        }
+
+        None
+    }
 }
 
 /// Elf file format 32-bit version
 pub struct Elf32<'a> {
-    pub header: Elf32_Ehdr,
-    pub elf_type: ElfType,
-    pub segments: Vec<ElfSegment32<'a>>,
-    pub sections: Vec<ElfSection32<'a>>,
+    header: Elf32_Ehdr,
+    elf_type: ElfType,
+    segments: Vec<ElfSegment32<'a>>,
+    sections: Vec<ElfSection32<'a>>,
 }
 
 
 /// Elf file format 64-bit version
 pub struct Elf64<'a> {
-    pub header: Elf64_Ehdr,
-    pub elf_type: ElfType,
-    pub segments: Vec<ElfSegment64<'a>>,
-    pub sections: Vec<ElfSection64<'a>>,
+    header: Elf64_Ehdr,
+    elf_type: ElfType,
+    segments: Vec<ElfSegment64<'a>>,
+    sections: Vec<ElfSection64<'a>>,
 }
 
+impl<'a> ElfFormat for Elf32<'a> {
+    fn header(&self) -> &ElfHeader {
+        &self.header
+    }
+
+    fn segments(&self) -> Vec<&ElfSegment> {
+        let mut v = Vec::new();
+        for elem in self.segments.iter() {
+            v.push(elem as &ElfSegment);
+        }
+
+        v
+    }
+
+    fn sections(&self) -> Vec<&ElfSection> {
+        let mut v = Vec::new();
+        for elem in self.sections.iter() {
+            v.push(elem as &ElfSection);
+        }
+
+        v
+    }
+}
+
+impl<'a> ElfFormat for Elf64<'a> {
+    fn header(&self) -> &ElfHeader {
+        &self.header
+    }
+
+    fn segments(&self) -> Vec<&ElfSegment> {
+        let mut v = Vec::new();
+        for elem in self.segments.iter() {
+            v.push(elem as &ElfSegment);
+        }
+
+        v
+    }
+
+    fn sections(&self) -> Vec<&ElfSection> {
+        let mut v = Vec::new();
+        for elem in self.sections.iter() {
+            v.push(elem as &ElfSection);
+        }
+
+        v
+    }
+}
+
+impl<'a> TryFrom<&'a Executable<'a>> for &'a ElfFormat {
+    type Error=Error;
+
+    /// Tries to convert an [`Executable`](../executable/enum.Executable.html) reference to an
+    /// [`ElfFormat` trait object](../elf/trait.ElfFormat.html)
+    fn try_from(value: &'a Executable) -> Result<&'a ElfFormat, Error> {
+        match *value {
+            Executable::Elf32(ref elf) => Ok(elf as &ElfFormat),
+            Executable::Elf64(ref elf) => Ok(elf as &ElfFormat),
+            _ => Err(RustepErrorKind::NotElf)?,
+        }
+    } 
+}
+
+/// parses input byes to executable
 pub fn parse_elf(input: &[u8]) -> Result<Executable, Error> {
     let elf_class = nom_try!(parse_elf_class(input)) as u32;
     match elf_class {
@@ -509,6 +913,10 @@ fn test_parse_elf32() {
     file.read_to_end(&mut buf).unwrap();
     
     let result = parse_elf32(&buf).unwrap();
+    {
+        let res: &ElfFormat = (&result).try_into().expect("unable to convert");
+        assert_eq!(res.header().elf_type().unwrap(), ElfType::ET_DYN);
+    }
     match result {
         Executable::Elf32(res) => {
             let section = res.sections[1].shdr;
@@ -535,6 +943,7 @@ fn test_parse_elf32() {
         },
         _ => panic!("Wrong file format detection"),
     };
+
 }
 
 #[test]
@@ -546,6 +955,10 @@ fn test_parse_elf() {
     file.read_to_end(&mut buf).unwrap();
     
     let result = parse_elf(&buf).unwrap();
+    {
+        let res: &ElfFormat = (&result).try_into().expect("unable to convert");
+        assert_eq!(res.header().elf_type().unwrap(), ElfType::ET_DYN);
+    }
     match result {
         Executable::Elf64(res) => {
             let section = res.sections[1].shdr;
@@ -619,6 +1032,10 @@ fn test_parse_elf64() {
     file.read_to_end(&mut buf).unwrap();
     
     let result = parse_elf64(&buf).unwrap();
+    {
+        let res: &ElfFormat = (&result).try_into().expect("unable to convert");
+        assert_eq!(res.header().elf_type().unwrap(), ElfType::ET_DYN);
+    }
     match result {
         Executable::Elf64(res) => {
             let section = res.sections[1].shdr;
